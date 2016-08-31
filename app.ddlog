@@ -37,3 +37,60 @@ sentences(
     dep_types      text[],
     dep_tokens     int[]
 ).
+
+## Candidate mapping ##########################################################
+@extraction
+person_mention(
+    @key
+    mention_id text,
+    @searchable
+    mention_text text,
+    @distributed_by
+    @references(relation="sentences", column="doc_id",         alias="appears_in")
+    doc_id text,
+    @references(relation="sentences", column="sentence_index", alias="appears_in")
+    sentence_index int,
+    begin_index int,
+    end_index int
+).
+
+function map_person_mention over (
+        doc_id text,
+        sentence_index int,
+        tokens text[],
+        ner_tags text[]
+    ) returns rows like person_mention
+    implementation "udf/map_person_mention.py" handles tsv lines.
+
+person_mention += map_person_mention(
+    doc_id, sentence_index, tokens, ner_tags
+) :- sentences(doc_id, sentence_index, _, tokens, _, _, ner_tags, _, _, _).
+
+@extraction
+organization_mention(
+    @key
+    mention_id text,
+    @searchable
+    mention_text text,
+    @distributed_by
+    @references(relation="sentences", column="doc_id",         alias="appears_in")
+    doc_id text,
+    @references(relation="sentences", column="sentence_index", alias="appears_in")
+    sentence_index int,
+    begin_index int,
+    end_index int
+).
+
+function map_organization_mention over (
+        doc_id text,
+        sentence_index int,
+        tokens text[],
+        ner_tags text[]
+    ) returns rows like organization_mention
+    implementation "udf/map_organization_mention.py" handles tsv lines.
+
+organization_mention += map_organization_mention(
+    doc_id, sentence_index, tokens, ner_tags
+) :- sentences(doc_id, sentence_index, _, tokens, _, _, ner_tags, _, _, _).
+
+
