@@ -1,0 +1,39 @@
+## Input Data #################################################################
+
+@source
+articles(
+    @key
+    @distributed_by
+    id text,
+    @searchable
+    content text
+).
+
+@source
+employer_dbpedia(
+    @key
+    person1_name text,
+    @key
+    employer_name text
+).
+
+## NLP markup #################################################################
+@source
+sentences(
+    @key
+    @distributed_by
+    # XXX This breaks the search index.  @source should not be derived from another @source
+    #@references(relation="articles", column="id")
+    doc_id         text,
+    @key
+    sentence_index int,
+    @searchable
+    sentence_text  text,
+    tokens         text[],
+    lemmas         text[],
+    pos_tags       text[],
+    ner_tags       text[],
+    doc_offsets    int[],
+    dep_types      text[],
+    dep_tokens     int[]
+).
