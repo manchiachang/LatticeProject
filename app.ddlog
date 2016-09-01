@@ -1,3 +1,16 @@
+## Random variable to predict #################################################
+
+# This application's goal is to predict whether a given pair of person and organization mention
+# are indicating a employment relationship or not.
+@extraction
+is_employment?(
+    @key
+    @references(relation="person_mention", column="mention_id", alias="p_id")
+    p_id text,
+    @key
+    @references(relation="organization_mention", column="mention_id", alias="e_id")
+    e_id text
+).
 ## Input Data #################################################################
 
 @source
@@ -93,4 +106,57 @@ organization_mention += map_organization_mention(
     doc_id, sentence_index, tokens, ner_tags
 ) :- sentences(doc_id, sentence_index, _, tokens, _, _, ner_tags, _, _, _).
 
+employment_candidate(
+    p_id text,
+    p_name text,
+    e_id text,
+    e_name text
+).
+employment_candidate(p_id, p_name, e_id, e_name) :-
+    person_mention(p_id, p_name, same_doc, same_sentence, p_begin, _),
+    organization_mention(e_id, e_name, same_doc, same_sentence, e_begin, _),
+    p_name != e_name,
+    p_begin != e_begin.
 
+
+## Feature Extraction #########################################################
+
+
+# Feature extraction (using DDLIB via a UDF) at the relation level
+@extraction
+employment_feature(
+    @key
+    @references(relation="is_employment", column="p_id", alias="is_employment")
+    p_id text,
+    @key
+    @references(relation="is_employment", column="e_id", alias="is_employment")
+    e_id text,
+    @key
+    feature text
+).
+
+function extract_employment_features over (
+        p_id text,
+        e_id text,
+        p_begin_index int,
+        p_end_index int,
+        e_begin_index int,
+        e_end_index int,
+        doc_id text,
+        sent_index int,
+        tokens text[],
+        lemmas text[],
+        pos_tags text[],
+        ner_tags text[],
+        dep_types text[],
+        dep_tokens int[]
+    ) returns rows like employment_feature
+    implementation "udf/extract_employment_features.py" handles tsv lines.
+
+employment_feature += extract_employment_features(
+    p_id, e_id, p_begin_index, p_end_index, e_begin_index, e_end_index,
+    doc_id, sent_index, tokens, lemmas, pos_tags, ner_tags, dep_types, dep_tokens
+) :-
+    person_mention(p_id, _, doc_id, sent_index, p_begin_index, p_end_index),
+    organization_mention(e_id, _, doc_id, sent_index, e_begin_index, e_end_index),
+    sentences(doc_id, sent_index, _, tokens, lemmas, pos_tags, ner_tags, _, dep_types, dep_tokens).
