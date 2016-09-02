@@ -160,3 +160,96 @@ employment_feature += extract_employment_features(
     person_mention(p_id, _, doc_id, sent_index, p_begin_index, p_end_index),
     organization_mention(e_id, _, doc_id, sent_index, e_begin_index, e_end_index),
     sentences(doc_id, sent_index, _, tokens, lemmas, pos_tags, ner_tags, _, dep_types, dep_tokens).
+
+## Distant Supervision ########################################################
+@extraction
+employment_label(
+    @key
+    @references(relation="is_employment", column="p_id", alias="is_employment")
+    p_id text,
+    @key
+    @references(relation="is_employment", column="e_id", alias="is_employment")
+    e_id text,
+    @navigable
+    label int,
+    @navigable
+    rule_id text
+).
+
+# make sure all pairs in employment_candidate are considered as unsupervised examples
+employment_label(p,e, 0, NULL) :- employment_candidate(p, _, e, _).
+
+# try
+
+employment_label(p,e, 1, "from_dbpedia") :-
+    employment_candidate(p, p_name, e, e_name),
+    employer_dbpedia(n1, n2),
+    [ lower(n1) = lower(p_name), lower(n2) = lower(e_name) ].
+
+# # distant supervision using data from DBpedia
+# function supervise_dbpedia over (
+#         # from data
+#         p_id text,
+#         p_name text,
+#         e_id text,
+#         e_name text,
+#         # from dbpedia
+#         p_db_name text,
+#         e_db_name text
+#     ) returns (
+#         p_id text, e_id text, label int, rule_id text
+#     )
+#     implementation "udf/supervise_employment_from_DBpedia.py" handles tsv lines.
+
+
+# employment_label += supervise_dbpedia(
+#     p_id,
+#     p_name,
+#     e_id,
+#     e_name,
+#     p_db_name,
+#     e_db_name
+# ) :- employment_candidate(p_id, p_name, e_id, e_name),
+#     employer_dbpedia(p_db_name,e_db_name).
+
+#supervision by heuristic rules in a UDF
+# function supervise over (
+#         # from data
+#         p_id text,
+#         p_text text,
+#         p_begin int, 
+#         p_end int,
+#         e_id text,
+#         e_text text,
+#         e_begin int, 
+#         e_end int,
+#         doc_id         text,
+#         sentence_index int,
+#         sentence_text  text,
+#         tokens         text[],
+#         lemmas         text[],
+#         pos_tags       text[],
+#         ner_tags       text[],
+#         dep_types      text[],
+#         dep_tokens    int[]
+#     ) returns (
+#         p_id text, e_id text, label int, rule_id text
+#     )
+#     implementation "udf/supervise_employment.py" handles tsv lines.
+
+# employment_label += supervise(
+#     p_id, p_text, p_begin, p_end,
+#     e_id, e_text, e_begin, e_end,
+#     doc_id, sentence_index, sentence_text,
+#     tokens, lemmas, pos_tags, ner_tags, dep_types, dep_token_indexes
+# ) :- employment_candidate(p_id, _, e_id, _),
+#     person_mention(p_id, p_text, doc_id, sentence_index, p_begin, p_end),
+#     organization_mention(e_id, e_text,      _,              _, e_begin, e_end),
+#     sentences(
+#         doc_id, sentence_index, sentence_text,
+#         tokens, lemmas, pos_tags, ner_tags, _, dep_types, dep_token_indexes
+#     ).
+
+
+
+# is_employment(p_id, e_id) = NULL :- employment_candidate(p_id, _, e_id, _).
