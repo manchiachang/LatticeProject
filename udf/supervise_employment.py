@@ -31,16 +31,18 @@ def supervise(
     # if (p_ratio >= RATIO_THRESHOLD) and (e_ratio >= RATIO_THRESHOLD):
     #     yield employment._replace(label=1,type='from_dbpedia')
 
-    JOB_GENERAL = frozenset(["job", "employee","member","worker"])
-    JOB_TITLE = frozenset(["manager", "executive", "engineer", "analyst", \
+    JOB_TITLE = frozenset(["job", "employee","member","worker","manager", "executive", "engineer", "analyst", \
         "developer", "accountant", "therapist", "director", "officer", "clerk",\
          "assistant", "consultant", "president","administrator","specialist","supervisor","chairman","founder"])
-    JOB_PREP = frozenset(["of", "at","by","in"])
+    
     JOB_VERB = frozenset(["work", "employ","hire"])
 
-    NO_JOB = frozenset(["retire","leave","resign","fire"])
+    NO_JOB_VERB = frozenset(["retire","resign","leave"])
+    NO_JOB_ADJ = frozenset(["former","retire"])
 
-    MAX_DIST = 10
+
+    FAR_DIST = 10
+    P_OF_E_DIST = 4
 
     # find the intermediate region
     min_end_idx = min(p_end, e_end)
@@ -48,33 +50,57 @@ def supervise(
     max_end_idx = max(p_end,e_end)
     intermediate_lemmas = lemmas[min_end_idx+1:max_start_idx]
     intermediate_ner_tags = ner_tags[min_end_idx+1:max_start_idx]
-    head_lemmas = lemmas[:e_begin]
+    intermediate_pos_tags = pos_tags[min_end_idx+1:max_start_idx]
+    e_head_lemmas = lemmas[:e_begin]
+    e_head_nertags = ner_tags[:e_begin]
+    e_head_postags = pos_tags[:e_begin]
+
     #tail_lemmas = lemmas[max_end_idx+1:]
 
 
     employment = employmentLabel(p_id=p_id, e_id=e_id, label=None, type=None)
 
+
     # too far way
-    if len(intermediate_lemmas) > MAX_DIST:
+    if len(intermediate_lemmas) > FAR_DIST:
         yield employment._replace(label=-1, type='neg:far_apart')
+    else:
+        # should not be any other organization between
+        if 'ORGANIZATION' in intermediate_ner_tags:
+            yield employment._replace(label=-1, type='neg:third_org_between')
+        
+        if 'PERSON' in intermediate_ner_tags:
+            yield employment._replace(label=-1, type='neg:third_person_between')
 
-    if 'ORGANIZATION' in intermediate_ner_tags:
-        yield employment._replace(label=-1, type='neg:third_org_between')
+        # words that indicates discharge 
+        if len(NO_JOB_VERB.intersection(intermediate_lemmas)) > 0:
+            yield employment._replace(label=-1, type='neg:leave_organization')
+
+        # PERSON, NO_JOB_ADJ JOB_TITLE of the ORGANIZATION
+        if len(NO_JOB_ADJ.intersection(intermediate_lemmas)) >0 and len(JOB_TITLE.intersection(e_head_lemmas)) > 0 and 'IN' in intermediate_pos_tags and e_begin > p_begin:
+            yield employment._replace(label=-1, type='neg:no_job_after_person')
 
 
-    # PERSON  work at|employ by ORGANIZATION
-    if len(JOB_VERB.intersection(intermediate_lemmas)) > 0 and len(JOB_PREP.intersection(intermediate_lemmas)) > 0:
-        yield employment._replace(label=1, type='pos:employ_verb')
+        # NO_JOB_ADJ JOB_TITLE of the ORGANIZATION, PERSON
+        if len(NO_JOB_ADJ.intersection(intermediate_lemmas)) >0 and len(JOB_TITLE.intersection(e_head_lemmas)) > 0 and 'IN' in e_head_postags and e_begin < p_begin:
+            yield employment._replace(label=-1, type='neg:no_job_before_person')
 
-    # JOB_TITLE JOB_PREP ORGANIZATION: executive of google
-    if len(JOB_TITLE.intersection(head_lemmas)) > 0 and len(JOB_PREP.intersection(head_lemmas)) > 0:
-        yield employment._replace(label=1, type='pos:employ_noun_before_org')
 
-    if (len(JOB_TITLE.intersection(intermediate_lemmas)) > 0 or len(JOB_GENERAL.intersection(intermediate_lemmas))) and len(JOB_PREP.intersection(head_lemmas)) > 0:
-        yield employment._replace(label=1, type='pos:employ_noun_in_between')
+        # PERSON of the ORGANIZATION without JOB TITILE
+        if len(JOB_TITLE.intersection(intermediate_lemmas)) == 0 and len(intermediate_lemmas) < P_OF_E_DIST and 'IN' in intermediate_pos_tags and e_begin > p_begin:
+            yield employment._replace(label=1, type='pos:employ_person_of_org')
+        
+        # PERSON, JOB_TITLE of the ORGANIZATION 
+        if len(JOB_TITLE.intersection(intermediate_lemmas)) > 0 and 'IN' in intermediate_pos_tags and e_begin > p_begin:
+            yield employment._replace(label=1, type='pos:employ_title_after_person')
 
-    if len(NO_JOB.intersection(intermediate_lemmas)) > 0:
-        yield employment._replace(label=-1, type='neg:leave organization')
+        # JOB_TITLE of the ORGANIZATION, PERSON
+        if len(JOB_TITLE.intersection(e_head_lemmas)) > 0 and 'IN' in e_head_postags and e_begin < p_begin:
+            yield employment._replace(label=1, type='pos:employ_title_before_person')
+
+        # PERSON  work at|employ by ORGANIZATION
+        if len(JOB_VERB.intersection(intermediate_lemmas)) > 0 and 'IN' in intermediate_pos_tags:
+            yield employment._replace(label=1, type='pos:employ_verb')
 
 
 

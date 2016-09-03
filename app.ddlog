@@ -5,22 +5,13 @@
 @extraction
 is_employment?(
     @key
-    @references(relation="person_mention", column="mention_id", alias="p_id")
+    @references(relation="person_mention", column="mention_id", alias="pID")
     p_id text,
     @key
-    @references(relation="organization_mention", column="mention_id", alias="e_id")
+    @references(relation="organization_mention", column="mention_id", alias="eID")
     e_id text
 ).
 ## Input Data #################################################################
-
-@source
-articles(
-    @key
-    @distributed_by
-    id text,
-    @searchable
-    content text
-).
 
 @source
 employer_dbpedia(
@@ -112,9 +103,17 @@ employment_candidate(
     e_id text,
     e_name text
 ).
+
+num_people(doc_id, sentence_index, COUNT(p)) :-
+    person_mention(p, _, doc_id, sentence_index, _, _).
+
+
+# extract person and organization appear in same sentece
 employment_candidate(p_id, p_name, e_id, e_name) :-
+    num_people(same_doc, same_sentence, num_p),
     person_mention(p_id, p_name, same_doc, same_sentence, p_begin, _),
     organization_mention(e_id, e_name, same_doc, same_sentence, e_begin, _),
+    num_p < 5,
     p_name != e_name,
     p_begin != e_begin.
 
@@ -186,70 +185,65 @@ employment_label(p,e, 1, "from_dbpedia") :-
     employer_dbpedia(n1, n2),
     [ lower(n1) = lower(p_name), lower(n2) = lower(e_name) ].
 
-# # distant supervision using data from DBpedia
-# function supervise_dbpedia over (
-#         # from data
-#         p_id text,
-#         p_name text,
-#         e_id text,
-#         e_name text,
-#         # from dbpedia
-#         p_db_name text,
-#         e_db_name text
-#     ) returns (
-#         p_id text, e_id text, label int, rule_id text
-#     )
-#     implementation "udf/supervise_employment_from_DBpedia.py" handles tsv lines.
-
-
-# employment_label += supervise_dbpedia(
-#     p_id,
-#     p_name,
-#     e_id,
-#     e_name,
-#     p_db_name,
-#     e_db_name
-# ) :- employment_candidate(p_id, p_name, e_id, e_name),
-#     employer_dbpedia(p_db_name,e_db_name).
 
 #supervision by heuristic rules in a UDF
-# function supervise over (
-#         # from data
-#         p_id text,
-#         p_text text,
-#         p_begin int, 
-#         p_end int,
-#         e_id text,
-#         e_text text,
-#         e_begin int, 
-#         e_end int,
-#         doc_id         text,
-#         sentence_index int,
-#         sentence_text  text,
-#         tokens         text[],
-#         lemmas         text[],
-#         pos_tags       text[],
-#         ner_tags       text[],
-#         dep_types      text[],
-#         dep_tokens    int[]
-#     ) returns (
-#         p_id text, e_id text, label int, rule_id text
-#     )
-#     implementation "udf/supervise_employment.py" handles tsv lines.
+function supervise over (
+        # from data
+        p_id text,
+        p_text text,
+        p_begin int, 
+        p_end int,
+        e_id text,
+        e_text text,
+        e_begin int, 
+        e_end int,
+        doc_id         text,
+        sentence_index int,
+        tokens         text[],
+        lemmas         text[],
+        pos_tags       text[],
+        ner_tags       text[]
+    ) returns (
+        p_id text, e_id text, label int, rule_id text
+    )
+    implementation "udf/supervise_employment.py" handles tsv lines.
 
-# employment_label += supervise(
-#     p_id, p_text, p_begin, p_end,
-#     e_id, e_text, e_begin, e_end,
-#     doc_id, sentence_index, sentence_text,
-#     tokens, lemmas, pos_tags, ner_tags, dep_types, dep_token_indexes
-# ) :- employment_candidate(p_id, _, e_id, _),
-#     person_mention(p_id, p_text, doc_id, sentence_index, p_begin, p_end),
-#     organization_mention(e_id, e_text,      _,              _, e_begin, e_end),
-#     sentences(
-#         doc_id, sentence_index, sentence_text,
-#         tokens, lemmas, pos_tags, ner_tags, _, dep_types, dep_token_indexes
-#     ).
+employment_label += supervise(
+    p_id, p_text, p_begin, p_end,
+    e_id, e_text, e_begin, e_end,
+    doc_id, sentence_index,
+    tokens, lemmas, pos_tags, ner_tags
+) :- employment_candidate(p_id, _, e_id, _),
+    person_mention(p_id, p_text, doc_id, sentence_index, p_begin, p_end),
+    organization_mention(e_id, e_text,      _,              _, e_begin, e_end),
+    sentences(
+        doc_id, sentence_index, _,tokens, lemmas, pos_tags, ner_tags, _, _, _
+    ).
 
 
+# resolve multiple labels by majority vote (summing the labels in {-1,0,1})
+employment_label_resolved(p_id, e_id, SUM(vote)) :- employment_label(p_id, e_id, vote, rule_id).
 
-# is_employment(p_id, e_id) = NULL :- employment_candidate(p_id, _, e_id, _).
+
+# assign the resolved labels for the spouse relation
+is_employment(p_id, e_id) = if l > 0 then TRUE
+                            else if l < 0 then FALSE
+                            else NULL end :- employment_label_resolved(p_id, e_id, l).
+
+
+## Inference Rules ############################################################
+
+# Features
+@weight(f)
+is_employment(p_id, e_id) :-
+    employment_candidate(p_id, _, e_id, _),
+    employment_feature(p_id, e_id, f).
+
+
+@weight(-1.0)
+is_employment(p_id, e1_id) => is_employment(p_id, e2_id) :-
+    employment_candidate(p_id, _, e1_id, _),
+    employment_candidate(p_id, _, e2_id, _).
+
+
+
