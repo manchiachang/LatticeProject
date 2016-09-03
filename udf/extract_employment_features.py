@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from deepdive import *
 import ddlib
+import os
 
 @tsv_extractor
 @returns(lambda
@@ -27,6 +28,8 @@ def extract(
     """
     Uses DDLIB to generate features for the spouse relation.
     """
+    ddlib.load_dictionary(os.path.abspath("../../../job_employ_keyword.txt"), dict_id="has_employment");
+    ddlib.load_dictionary(os.path.abspath("../../../job_no_employ_keyword.txt"),dict_id="no_employment");
     # Create a DDLIB sentence object, which is just a list of DDLIB Word objects
     sent = []
     for i,t in enumerate(tokens):

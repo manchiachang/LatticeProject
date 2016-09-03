@@ -35,14 +35,14 @@ def supervise(
         "developer", "accountant", "therapist", "director", "officer", "clerk",\
          "assistant", "consultant", "president","administrator","specialist","supervisor","chairman","founder"])
     
-    JOB_VERB = frozenset(["work", "employ","hire"])
+    JOB_VERB = frozenset(["work", "employ","hire","lead"])
 
     NO_JOB_VERB = frozenset(["retire","resign","leave"])
     NO_JOB_ADJ = frozenset(["former","retire"])
 
 
     FAR_DIST = 10
-    P_OF_E_DIST = 4
+    MAX_P_E_DIST = 4
 
     # find the intermediate region
     min_end_idx = min(p_end, e_end)
@@ -77,17 +77,17 @@ def supervise(
             yield employment._replace(label=-1, type='neg:leave_organization')
 
         # PERSON, NO_JOB_ADJ JOB_TITLE of the ORGANIZATION
-        if len(NO_JOB_ADJ.intersection(intermediate_lemmas)) >0 and len(JOB_TITLE.intersection(e_head_lemmas)) > 0 and 'IN' in intermediate_pos_tags and e_begin > p_begin:
+        if len(NO_JOB_ADJ.intersection(intermediate_lemmas)) >0 and len(JOB_TITLE.intersection(intermediate_lemmas)) > 0 and 'IN' in intermediate_pos_tags and e_begin > p_begin:
             yield employment._replace(label=-1, type='neg:no_job_after_person')
 
 
         # NO_JOB_ADJ JOB_TITLE of the ORGANIZATION, PERSON
-        if len(NO_JOB_ADJ.intersection(intermediate_lemmas)) >0 and len(JOB_TITLE.intersection(e_head_lemmas)) > 0 and 'IN' in e_head_postags and e_begin < p_begin:
+        if len(NO_JOB_ADJ.intersection(e_head_lemmas)) >0 and len(JOB_TITLE.intersection(e_head_lemmas)) > 0 and 'IN' in e_head_postags and e_begin < p_begin:
             yield employment._replace(label=-1, type='neg:no_job_before_person')
 
 
         # PERSON of the ORGANIZATION without JOB TITILE
-        if len(JOB_TITLE.intersection(intermediate_lemmas)) == 0 and len(intermediate_lemmas) < P_OF_E_DIST and 'IN' in intermediate_pos_tags and e_begin > p_begin:
+        if len(JOB_TITLE.intersection(intermediate_lemmas)) == 0 and len(intermediate_lemmas) < MAX_P_E_DIST and 'IN' in intermediate_pos_tags and e_begin > p_begin:
             yield employment._replace(label=1, type='pos:employ_person_of_org')
         
         # PERSON, JOB_TITLE of the ORGANIZATION 
@@ -102,6 +102,9 @@ def supervise(
         if len(JOB_VERB.intersection(intermediate_lemmas)) > 0 and 'IN' in intermediate_pos_tags:
             yield employment._replace(label=1, type='pos:employ_verb')
 
+        # No preposition, ORGANIZATION JOB_TITLE, PERSON
+        if len(JOB_TITLE.intersection(intermediate_lemmas)) > 0 and 'IN' not in intermediate_pos_tags and len(intermediate_lemmas) < MAX_P_E_DIST :
+            yield employment._replace(label=1, type='pos:employ_person_org')
 
 
 

@@ -240,10 +240,5 @@ is_employment(p_id, e_id) :-
     employment_feature(p_id, e_id, f).
 
 
-@weight(-1.0)
-is_employment(p_id, e1_id) => is_employment(p_id, e2_id) :-
-    employment_candidate(p_id, _, e1_id, _),
-    employment_candidate(p_id, _, e2_id, _).
-
 
 
