@@ -26,4 +26,4 @@ deepdive sql eval "SELECT hsi.p_id
    AND       expectation >= 0.9
 
  ORDER BY random()
- LIMIT 200" format=csv header=1 >labeling/is_employment-precision/is_employment.csv
+ LIMIT 100" format=csv header=1 >labeling/is_employment-precision/is_employment.csv

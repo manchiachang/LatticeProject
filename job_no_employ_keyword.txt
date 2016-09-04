@@ -1,5 +1,6 @@
 retire
 resign
-leave
-former
-retire
+fire
+discharge
+dismiss
+layoff

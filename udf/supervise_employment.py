@@ -37,9 +37,9 @@ def supervise(
     
     JOB_VERB = frozenset(["work", "employ","hire","lead"])
 
-    NO_JOB_VERB = frozenset(["retire","resign","leave"])
-    NO_JOB_ADJ = frozenset(["former","retire"])
-
+    NO_JOB = frozenset(["retire","resign","fire","discharge","layoff","dismiss"])
+    #NO_JOB_ADJ = frozenset(["former","retire"])
+    CONJUNCT = frozenset(["with","and"])
 
     FAR_DIST = 10
     MAX_P_E_DIST = 4
@@ -54,6 +54,9 @@ def supervise(
     e_head_lemmas = lemmas[:e_begin]
     e_head_nertags = ner_tags[:e_begin]
     e_head_postags = pos_tags[:e_begin]
+    e_tail_nertags = ner_tags[e_end+1:]
+
+    
 
     #tail_lemmas = lemmas[max_end_idx+1:]
 
@@ -72,19 +75,14 @@ def supervise(
         if 'PERSON' in intermediate_ner_tags:
             yield employment._replace(label=-1, type='neg:third_person_between')
 
-        # words that indicates discharge 
-        if len(NO_JOB_VERB.intersection(intermediate_lemmas)) > 0:
-            yield employment._replace(label=-1, type='neg:leave_organization')
 
-        # PERSON, NO_JOB_ADJ JOB_TITLE of the ORGANIZATION
-        if len(NO_JOB_ADJ.intersection(intermediate_lemmas)) >0 and len(JOB_TITLE.intersection(intermediate_lemmas)) > 0 and 'IN' in intermediate_pos_tags and e_begin > p_begin:
-            yield employment._replace(label=-1, type='neg:no_job_after_person')
+        # PERSON, and|with JOB_TITLE ORGANIZATION, PERSON
+        if len(CONJUNCT.intersection(intermediate_lemmas)) > 0  and e_begin > p_begin and len(JOB_TITLE.intersection(intermediate_lemmas)) > 0 and 'PERSON' in e_tail_nertags  :
+            yield employment._replace(label=-1, type='neg:person_before_employment' )
 
-
-        # NO_JOB_ADJ JOB_TITLE of the ORGANIZATION, PERSON
-        if len(NO_JOB_ADJ.intersection(e_head_lemmas)) >0 and len(JOB_TITLE.intersection(e_head_lemmas)) > 0 and 'IN' in e_head_postags and e_begin < p_begin:
-            yield employment._replace(label=-1, type='neg:no_job_before_person')
-
+        # words that indicates previous employment
+        if len(NO_JOB.intersection(intermediate_lemmas)) > 0:
+            yield employment._replace(label=1, type='pos:employment_before')
 
         # PERSON of the ORGANIZATION without JOB TITILE
         if len(JOB_TITLE.intersection(intermediate_lemmas)) == 0 and len(intermediate_lemmas) < MAX_P_E_DIST and 'IN' in intermediate_pos_tags and e_begin > p_begin:
